@@ -1,7 +1,7 @@
 service: minimal-example
 
 plugins:
-  - ./node_modules/@sensorup/serverless-esbuild
+  - serverless-esbuild
   - serverless-offline
 
 provider:
