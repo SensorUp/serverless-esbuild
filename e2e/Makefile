@@ -1,6 +1,6 @@
-test-e2e: test-e2e-minimal test-e2e-individually test-e2e-complete
+test-e2e: test-e2e-minimal test-e2e-individually test-e2e-individually-compiled test-e2e-complete
 
-build: 
+build:
 	npm run build
 	npm link
 
@@ -14,6 +14,14 @@ test-e2e-minimal: build
 test-e2e-individually: build
 	rm -fr ./e2e/individually && mkdir ./e2e/individually && rsync -r ./examples/individually/ ./e2e/individually/
 	cd ./e2e/individually && npm i && npm link serverless-esbuild && npx sls package
+	cd ./e2e/individually/.serverless && unzip hello1.zip && unzip hello2.zip
+	npx jest -c jest.config.e2e.js --ci ./e2e/individually.test.ts
+	rm -fr ./e2e/individually
+
+test-e2e-individually-compiled: build
+	rm -fr ./e2e/individually && mkdir ./e2e/individually && rsync -r ./examples/individually/ ./e2e/individually/
+	cd ./e2e/individually && npm i && npm link serverless-esbuild && npx sls esbuild --esbuildArtifactPath ./esbuild --verbose
+	cd ./e2e/individually && rm hello1.ts hello2.ts && npx sls package --esbuildArtifactPath ./esbuild --verbose
 	cd ./e2e/individually/.serverless && unzip hello1.zip && unzip hello2.zip
 	npx jest -c jest.config.e2e.js --ci ./e2e/individually.test.ts
 	rm -fr ./e2e/individually

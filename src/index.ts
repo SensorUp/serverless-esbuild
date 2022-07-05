@@ -129,6 +129,9 @@ class EsbuildServerlessPlugin implements ServerlessPlugin {
         this.watch();
       },
       'before:package:createDeploymentArtifacts': async () => {
+        this.log.debug(
+          `before:package:createDeploymentArtifacts compiledPath: ${this.compiledPath}`
+        );
         if (!this.compiledPath) {
           await this.bundle();
           await this.packExternalModules();
@@ -157,6 +160,7 @@ class EsbuildServerlessPlugin implements ServerlessPlugin {
         await this.preLocal();
       },
       'esbuild:esbuild': async () => {
+        this.log.debug(`esbuild:esbuild compiledPath: ${this.compiledPath}`);
         await this.bundle();
         await this.packExternalModules();
         await this.copyExtras();
@@ -461,11 +465,17 @@ class EsbuildServerlessPlugin implements ServerlessPlugin {
   async restoreArtifacts(): Promise<void> {
     // const { service } = this.serverless;
     // if (service.package.individually || this.options.function) {}
+    if (!this.compiledPath) {
+      this.log.error('Missing --esbuildArtifactPath');
+      return;
+    }
 
     this.prepare();
-    this.log.verbose(`Placing compiled artifacts to ${this.buildOptions.target} target...`);
+    this.log.debug(`Using compiled artifacts for ${this.buildOptions.target} bundle...`);
 
-    const buildResults = this.functionEntries.map(({ func, functionAlias }) => {
+    await fs.copy(path.join(this.compiledPath), path.join(this.serviceDirPath, SERVERLESS_FOLDER));
+
+    const buildResults = Object.entries(this.functions).map(([functionAlias, func]) => {
       return { func, functionAlias };
     });
 
@@ -473,10 +483,7 @@ class EsbuildServerlessPlugin implements ServerlessPlugin {
       buildResults.map(async ({ func, functionAlias }) => {
         this.log.info(JSON.stringify({ func, functionAlias }));
         const zipName = `${functionAlias}.zip`;
-        const compiledPath = path.join(this.compiledPath, zipName);
-        func.package = {
-          artifact: compiledPath,
-        };
+        func.package.artifact = path.join(this.serviceDirPath, SERVERLESS_FOLDER, zipName);
       })
     );
   }
@@ -488,6 +495,8 @@ class EsbuildServerlessPlugin implements ServerlessPlugin {
       this.log.error('Missing --esbuildArtifactPath');
       return;
     }
+
+    this.log.debug(`Preserving compiled artifacts for ${this.buildOptions.target} bundle...`);
 
     fs.removeSync(path.join(this.compiledPath));
 
