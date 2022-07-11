@@ -1,7 +1,7 @@
 {
   "name": "serverless-esbuild",
   "description": "Serverless plugin for zero-config JavaScript and TypeScript code bundling using extremely fast esbuild",
-  "version": "1.31.1-build.3",
+  "version": "1.31.1-build.4",
   "license": "MIT",
   "author": "Victor Korzunin",
   "main": "dist/index.js",
