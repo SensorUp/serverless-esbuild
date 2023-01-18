@@ -1,4 +1,4 @@
-test-e2e: test-e2e-minimal test-e2e-individually test-e2e-complete test-e2e-config
+test-e2e: test-e2e-minimal test-e2e-individually test-e2e-individually-compiled test-e2e-complete test-e2e-config
 
 build:
 	npm run build
@@ -15,6 +15,13 @@ test-e2e-individually: build
 	cd ./.test-artifacts/individually && yarn install && npx sls package
 	cd ./.test-artifacts/individually/.serverless && unzip hello1.zip && unzip hello2.zip
 	npx jest -c jest.config.e2e.js --ci ./e2e/individually.test.ts
+	rm -fr ./.test-artifacts
+
+test-e2e-individually-compiled: build
+	rm -fr ./.test-artifacts && mkdir -p ./.test-artifacts/individually && rsync -r ./examples/individually/ ./.test-artifacts/individually/
+	cd ./.test-artifacts/individually && yarn install && npx sls esbuild --esbuildArtifactPath ./dist/esbuild
+	cd ./.test-artifacts/individually/dist/esbuild && unzip hello1.zip && unzip hello2.zip
+	npx jest -c jest.config.e2e.js --ci ./e2e/individuallyCompiled.test.ts
 	rm -fr ./.test-artifacts
 
 test-e2e-complete: build

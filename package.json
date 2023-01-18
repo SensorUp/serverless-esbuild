@@ -1,6 +1,6 @@
 {
-  "name": "serverless-esbuild",
-  "version": "0.0.0-development",
+  "name": "@sensorup/serverless-esbuild",
+  "version": "1.37.0-build.1",
   "description": "Serverless plugin for zero-config JavaScript and TypeScript code bundling using extremely fast esbuild",
   "keywords": [
     "serverless",
@@ -20,7 +20,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/floydspace/serverless-esbuild.git"
+    "url": "https://github.com/sensorup/serverless-esbuild.git"
   },
   "license": "MIT",
   "author": {
