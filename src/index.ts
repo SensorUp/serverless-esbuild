@@ -64,11 +64,15 @@ class EsbuildServerlessPlugin implements ServerlessPlugin {
 
   buildDirPath: string | undefined;
 
+  compiledPath: string | undefined;
+
   log: ServerlessPlugin.Logging['log'];
 
   serverless: Serverless;
 
   options: Serverless.Options;
+
+  commands: ServerlessPlugin.Commands;
 
   hooks: ServerlessPlugin.Hooks;
 
@@ -98,6 +102,11 @@ class EsbuildServerlessPlugin implements ServerlessPlugin {
     // @ts-ignore old versions use servicePath, new versions serviceDir. Types will use only one of them
     this.serviceDirPath = this.serverless.config.serviceDir || this.serverless.config.servicePath;
 
+    this.log.info(JSON.stringify(this.options));
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore
+    this.compiledPath = this.options.esbuildArtifactPath;
+
     this.packExternalModules = packExternalModules.bind(this);
     this.pack = pack.bind(this);
     this.preOffline = preOffline.bind(this);
@@ -111,6 +120,19 @@ class EsbuildServerlessPlugin implements ServerlessPlugin {
         skipEsbuild: { type: 'boolean' },
       },
     });
+
+    this.commands = {
+      esbuild: {
+        usage: 'Bundle with esbuild',
+        lifecycleEvents: ['esbuild'],
+        options: {
+          esbuildArtifactPath: {
+            usage: 'Path to esbuild artifacts',
+            // @TODO type: 'string'
+          },
+        },
+      },
+    };
 
     this.hooks = {
       initialize: () => this.init(),
@@ -134,12 +156,26 @@ class EsbuildServerlessPlugin implements ServerlessPlugin {
         this.watch();
       },
       'before:package:createDeploymentArtifacts': async () => {
+        this.log.debug(`before:package:createDeploymentArtifacts compiledPath: ${this.compiledPath}`);
+        if (!this.compiledPath) {
+          await this.bundle();
+          await this.packExternalModules();
+          await this.copyExtras();
+          await this.pack();
+        } else {
+          await this.restoreArtifacts();
+        }
+      },
+      'after:package:createDeploymentArtifacts': async () => {
+        await this.cleanup();
+      },
+      'esbuild:esbuild': async () => {
+        this.log.info(`esbuild:esbuild compiledPath: ${this.compiledPath}`);
         await this.bundle();
         await this.packExternalModules();
         await this.copyExtras();
         await this.pack();
-      },
-      'after:package:createDeploymentArtifacts': async () => {
+        await this.saveArtifacts();
         await this.cleanup();
       },
       'before:deploy:function:packageFunction': async () => {
@@ -470,6 +506,68 @@ class EsbuildServerlessPlugin implements ServerlessPlugin {
     }
 
     service.package.artifact = path.join(SERVERLESS_FOLDER, path.basename(service.package.artifact));
+  }
+
+  async restoreArtifacts(): Promise<void> {
+    // const { service } = this.serverless;
+    // if (service.package.individually || this.options.function) {}
+    if (!this.compiledPath || !this.buildOptions) {
+      this.log.error('Missing --esbuildArtifactPath');
+      return;
+    }
+
+    this.prepare();
+    this.log.debug(`Using compiled artifacts for ${this.buildOptions.target} bundle...`);
+
+    await fs.copy(path.join(this.compiledPath), path.join(this.serviceDirPath, SERVERLESS_FOLDER));
+
+    const buildResults = Object.entries(this.functions).map(([functionAlias, func]) => {
+      return { func, functionAlias };
+    });
+
+    await Promise.all(
+      buildResults.map(async ({ func, functionAlias }) => {
+        this.log.info(JSON.stringify({ func, functionAlias }));
+        const zipName = `${functionAlias}.zip`;
+        if (func && func.package) {
+          // eslint-disable-next-line no-param-reassign
+          func.package.artifact = path.join(this.serviceDirPath, SERVERLESS_FOLDER, zipName);
+        }
+      })
+    );
+  }
+
+  async saveArtifacts(): Promise<void> {
+    const { service } = this.serverless;
+
+    if (!this.buildOptions || !this.workDirPath) {
+      return;
+    }
+
+    if (!this.compiledPath) {
+      this.log.error('Missing --esbuildArtifactPath');
+      return;
+    }
+
+    this.log.debug(`Preserving compiled artifacts for ${this.buildOptions.target} bundle...`);
+
+    fs.removeSync(path.join(this.compiledPath));
+
+    await fs.copy(path.join(this.workDirPath, SERVERLESS_FOLDER), path.join(this.compiledPath));
+
+    if (service.package.individually || this.options.function) {
+      Object.values(this.functions).forEach((func) => {
+        if (func && func.package && this.compiledPath && func.package.artifact) {
+          // eslint-disable-next-line no-param-reassign
+          func.package.artifact = path.join(this.compiledPath, path.basename(func.package.artifact));
+        }
+      });
+      return;
+    }
+
+    service.package.artifact = path.join(this.compiledPath, path.basename(service.package.artifact));
+
+    fs.removeSync(path.join(this.workDirPath));
   }
 
   async cleanup(): Promise<void> {
